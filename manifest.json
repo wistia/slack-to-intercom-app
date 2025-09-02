@@ -1,0 +1,102 @@
+{
+    "display_information": {
+        "name": "Send to Intercom",
+        "description": "Create a support ticket in Intercom directly from Slack.",
+        "background_color": "#2a8c87",
+        "long_description": "This app creates support tickets in Intercom using data collected from Slack workflow forms. It receives ticket details from a Slack form and opens a convo using Intercom's ticket API."
+    },
+    "features": {
+        "bot_user": {
+            "display_name": "Send to Intercom",
+            "always_online": false
+        }
+    },
+    "oauth_config": {
+        "scopes": {
+            "bot": [
+                "app_mentions:read",
+                "chat:write",
+                "users:read"
+            ]
+        }
+    },
+    "settings": {
+        "event_subscriptions": {
+            "bot_events": [
+                "app_mention",
+                "function_executed"
+            ]
+        },
+        "interactivity": {
+            "is_enabled": true
+        },
+        "org_deploy_enabled": true,
+        "socket_mode_enabled": true,
+        "token_rotation_enabled": false,
+        "hermes_app_type": "remote",
+        "function_runtime": "remote"
+    },
+    "functions": {
+        "create_support_ticket": {
+            "title": "Create Support Ticket",
+            "description": "Send ticket details to Intercom API and create support ticket",
+            "input_parameters": {
+                "title": {
+                    "type": "string",
+                    "title": "Ticket Title",
+                    "description": "Subject/title of the support ticket",
+                    "is_required": true,
+                    "name": "title"
+                },
+                "description": {
+                    "type": "string",
+                    "title": "Description",
+                    "description": "Detailed description of the issue",
+                    "is_required": true,
+                    "name": "description"
+                },
+                "customer_email": {
+                    "type": "string",
+                    "title": "Customer Email",
+                    "description": "Email address of the customer",
+                    "is_required": true,
+                    "name": "customer_email"
+                },
+                "ticket_type": {
+                    "type": "string",
+                    "title": "Ticket Type",
+                    "description": "Type of support ticket",
+                    "is_required": false,
+                    "name": "ticket_type"
+                },
+                "reporter": {
+                    "type": "slack#/types/user_id",
+                    "title": "Reporter",
+                    "description": "User who initiated the ticket creation",
+                    "is_required": false,
+                    "name": "reporter"
+                }
+            },
+            "output_parameters": {
+                "ticket_id": {
+                    "type": "string",
+                    "title": "Ticket ID",
+                    "description": "Intercom ticket identifier",
+                    "name": "ticket_id"
+                },
+                "ticket_url": {
+                    "type": "string",
+                    "title": "Ticket URL",
+                    "description": "Direct link to the created ticket in Intercom",
+                    "name": "ticket_url"
+                },
+                "status": {
+                    "type": "string",
+                    "title": "Creation Status",
+                    "description": "Success or error status of ticket creation",
+                    "name": "status"
+                }
+            }
+        }
+    }
+}
