@@ -3,7 +3,7 @@
         "name": "Send to Intercom",
         "description": "Create a support ticket in Intercom directly from Slack.",
         "background_color": "#2a8c87",
-        "long_description": "Open a ticket in Intercom from a Slack thread or channel. Call the bot via @ mention to start the ticket creation process. After providing basic details via popup form, a new ticket will be opened and the bot will respond with the ticket ID and URL."
+        "long_description": "Open a ticket in Intercom from a Slack thread or channel. Call the bot via @ mention to start the ticket creation process. After providing basic details via popup form, a new ticket will be opened and the bot will respond with the ticket ID and URL. Built by Harper for Wistia Support."
     },
     "features": {
         "bot_user": {
@@ -16,7 +16,8 @@
             "bot": [
                 "app_mentions:read",
                 "chat:write",
-                "users:read"
+                "users:read",
+                "users:read.email"
             ]
         }
     },

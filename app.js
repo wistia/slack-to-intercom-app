@@ -3,6 +3,28 @@ require('dotenv').config();
 const { App } = require('@slack/bolt');
 const axios = require('axios');
 
+// Function to get Slack user information including email
+async function getSlackUserInfo(userId, client) {
+    try {
+        const result = await client.users.info({
+            user: userId
+        });
+        return {
+            email: result.user.profile.email,
+            real_name: result.user.real_name || result.user.name
+        };
+    } catch (error) {
+        throw new Error(`Failed to get Slack user info: ${error.message}`);
+    }
+}
+
+// Function to create Slack thread permalink
+function createSlackThreadLink(channelId, threadTs) {
+    // Remove the decimal point from timestamp for URL format
+    const formattedTs = threadTs.replace('.', '');
+    return `https://wistia.slack.com/archives/${channelId}/p${formattedTs}`;
+}
+
 // Initialize the Bolt app
 const app = new App({
     token: process.env.SLACK_BOT_TOKEN,
@@ -14,7 +36,7 @@ const app = new App({
 
 // Reusable function to create support ticket in Intercom
 async function createSupportTicket(ticketData, logger) {
-    const { title, description, customer_email } = ticketData;
+    const { title, description, customer_email, slack_user_info, thread_link } = ticketData;
 
     // Validate required fields
     if (!title || !description || !customer_email) {
@@ -30,8 +52,27 @@ async function createSupportTicket(ticketData, logger) {
         ticket_attributes: {
             _default_title_: title,
             _default_description_: description
-        }
+        },
+        tags: ['Slack to Intercom app']
     };
+
+    // Add ticket parts including the context note if Slack info is available
+    if (slack_user_info && thread_link) {
+        const contextNote = `<p><strong>Ticket opened with the Slack to Intercom app.</strong></p>
+<p><strong>Ticket created by:</strong> ${slack_user_info.email} (${slack_user_info.real_name})</p>
+<p><strong>Original thread:</strong> <a href="${thread_link}" target="_blank">View in Slack</a></p>`;
+
+        intercomPayload.ticket_parts = [
+            {
+                part_type: "note",
+                body: contextNote,
+                author: {
+                    type: "admin",
+                    id: process.env.INTERCOM_ADMIN_ID
+                }
+            }
+        ];
+    }
 
     // Make API call to Intercom
     const response = await axios.post('https://api.intercom.io/tickets', intercomPayload, {
@@ -121,6 +162,10 @@ const ticketModalView = {
             label: {
                 type: 'plain_text',
                 text: 'Customer Email'
+            },
+            hint: {
+                type: 'plain_text',
+                text: 'NOTE: this user will receive an email notification when you click Create Ticket'
             }
         },
     ]
@@ -129,7 +174,7 @@ const ticketModalView = {
 // Handle app mentions to show ticket creation button
 app.event('app_mention', async ({ event, client, logger }) => {
     try {
-        logger.info('App mentioned in channel:', event.channel);
+        logger.info(`App mentioned by user ${event.user} in channel: ${event.channel}`);
 
         // Respond with a button to create a ticket
         await client.chat.postMessage({
@@ -211,11 +256,24 @@ app.view('ticket_modal', async ({ ack, body, view, client, logger }) => {
         const metadata = JSON.parse(view.private_metadata);
         const { channel, thread_ts, user } = metadata;
 
-        // Create the support ticket
+        // Get Slack user information
+        let slack_user_info = null;
+        let thread_link = null;
+
+        try {
+            slack_user_info = await getSlackUserInfo(user, client);
+            thread_link = createSlackThreadLink(channel, thread_ts);
+        } catch (userInfoError) {
+            logger.warn('Failed to get Slack user info or create thread link:', userInfoError.message);
+        }
+
+        // Create the support ticket with additional context
         const result = await createSupportTicket({
             title,
             description,
-            customer_email
+            customer_email,
+            slack_user_info,
+            thread_link
         }, logger);
 
         // Post success message in the original thread/channel
