@@ -14,7 +14,7 @@ const app = new App({
 
 // Reusable function to create support ticket in Intercom
 async function createSupportTicket(ticketData, logger) {
-    const { title, description, customer_email, ticket_type = 'support' } = ticketData;
+    const { title, description, customer_email } = ticketData;
 
     // Validate required fields
     if (!title || !description || !customer_email) {
@@ -23,17 +23,13 @@ async function createSupportTicket(ticketData, logger) {
 
     // Prepare Intercom API payload
     const intercomPayload = {
-        ticket_type_id: process.env.INTERCOM_TICKET_TYPE_ID || 'default',
+        ticket_type_id: process.env.INTERCOM_TICKET_TYPE_ID,
         contacts: [{
             email: customer_email
         }],
-        ticket_parts: [{
-            part_type: 'note',
-            body: description
-        }],
         ticket_attributes: {
-            subject: title,
-            _default_title_: title
+            _default_title_: title,
+            _default_description_: description
         }
     };
 
@@ -42,7 +38,7 @@ async function createSupportTicket(ticketData, logger) {
         headers: {
             'Authorization': `Bearer ${process.env.INTERCOM_ACCESS_TOKEN}`,
             'Content-Type': 'application/json',
-            'Intercom-Version': '2.10'
+            'Intercom-Version': '2.14'
         },
         timeout: 10000
     });
@@ -127,79 +123,75 @@ const ticketModalView = {
                 text: 'Customer Email'
             }
         },
-        {
-            type: 'input',
-            block_id: 'ticket_type_block',
-            element: {
-                type: 'static_select',
-                action_id: 'ticket_type_select',
-                placeholder: {
-                    type: 'plain_text',
-                    text: 'Select ticket type'
-                },
-                initial_option: {
-                    text: {
-                        type: 'plain_text',
-                        text: 'Support'
-                    },
-                    value: 'support'
-                },
-                options: [
-                    {
-                        text: {
-                            type: 'plain_text',
-                            text: 'Support'
-                        },
-                        value: 'support'
-                    },
-                    {
-                        text: {
-                            type: 'plain_text',
-                            text: 'Bug Report'
-                        },
-                        value: 'bug'
-                    },
-                    {
-                        text: {
-                            type: 'plain_text',
-                            text: 'Feature Request'
-                        },
-                        value: 'feature'
-                    }
-                ]
-            },
-            label: {
-                type: 'plain_text',
-                text: 'Ticket Type'
-            },
-            optional: true
-        }
     ]
 };
 
-// Handle app mentions to open ticket creation modal
+// Handle app mentions to show ticket creation button
 app.event('app_mention', async ({ event, client, logger }) => {
     try {
         logger.info('App mentioned in channel:', event.channel);
+
+        // Respond with a button to create a ticket
+        await client.chat.postMessage({
+            channel: event.channel,
+            thread_ts: event.thread_ts || event.ts,
+            text: "I can help you create a support ticket in Intercom!",
+            blocks: [
+                {
+                    type: 'section',
+                    text: {
+                        type: 'mrkdwn',
+                        text: '🎫 I can help you create a support ticket in Intercom!'
+                    }
+                },
+                {
+                    type: 'actions',
+                    elements: [
+                        {
+                            type: 'button',
+                            text: {
+                                type: 'plain_text',
+                                text: 'Create Ticket'
+                            },
+                            action_id: 'create_ticket_button',
+                            style: 'primary'
+                        }
+                    ]
+                }
+            ]
+        });
+
+    } catch (error) {
+        logger.error('Error handling app mention:', error);
+    }
+});
+
+// Handle button click to open ticket creation modal
+app.action('create_ticket_button', async ({ ack, body, client, logger }) => {
+    try {
+        // Acknowledge the button click
+        await ack();
+
+        logger.info('Create ticket button clicked');
 
         // Store the original message context for later use
         const modalView = {
             ...ticketModalView,
             private_metadata: JSON.stringify({
-                channel: event.channel,
-                thread_ts: event.thread_ts || event.ts,
-                user: event.user
+                channel: body.channel.id,
+                thread_ts: body.message.thread_ts || body.message.ts,
+                user: body.user.id
             })
         };
 
-        // Open the modal
+        // Open the modal using the trigger_id from the button interaction
         await client.views.open({
-            trigger_id: event.trigger_id,
+            trigger_id: body.trigger_id,
             view: modalView
         });
 
     } catch (error) {
-        logger.error('Error handling app mention:', error);
+        logger.error('Error handling create ticket button:', error);
     }
 });
 
@@ -214,7 +206,6 @@ app.view('ticket_modal', async ({ ack, body, view, client, logger }) => {
         const title = values.title_block.title_input.value;
         const description = values.description_block.description_input.value;
         const customer_email = values.email_block.email_input.value;
-        const ticket_type = values.ticket_type_block.ticket_type_select.selected_option?.value || 'support';
 
         // Get original context from private metadata
         const metadata = JSON.parse(view.private_metadata);
@@ -224,8 +215,7 @@ app.view('ticket_modal', async ({ ack, body, view, client, logger }) => {
         const result = await createSupportTicket({
             title,
             description,
-            customer_email,
-            ticket_type
+            customer_email
         }, logger);
 
         // Post success message in the original thread/channel
@@ -262,35 +252,6 @@ app.view('ticket_modal', async ({ ack, body, view, client, logger }) => {
     }
 });
 
-// Legacy workflow function (kept for backward compatibility)
-app.function('create_support_ticket', async ({ complete, fail, inputs, client, logger }) => {
-    try {
-        logger.info('Creating support ticket with inputs:', inputs);
-
-        const result = await createSupportTicket(inputs, logger);
-
-        await complete({
-            outputs: result
-        });
-
-    } catch (error) {
-        logger.error('Error creating support ticket:', error);
-
-        let errorMessage = 'Unknown error occurred';
-
-        if (error.response) {
-            errorMessage = `Intercom API error: ${error.response.status} - ${error.response.data?.message || 'Unknown API error'}`;
-        } else if (error.request) {
-            errorMessage = 'Network error: Could not reach Intercom API';
-        } else if (error.message) {
-            errorMessage = `Error: ${error.message}`;
-        }
-
-        await fail({
-            error: errorMessage
-        });
-    }
-});
 
 // Start the app
 (async () => {
