@@ -135,13 +135,13 @@ app.event('app_mention', async ({ event, client, logger }) => {
         await client.chat.postMessage({
             channel: event.channel,
             thread_ts: event.thread_ts || event.ts,
-            text: "I can help you create a support ticket in Intercom!",
+            text: "Awoo! Click below and complete the form to open a ticket",
             blocks: [
                 {
                     type: 'section',
                     text: {
                         type: 'mrkdwn',
-                        text: '🎫 I can help you create a support ticket in Intercom!'
+                        text: '🎫🐕 Awoo! Click the button to get started.'
                     }
                 },
                 {
@@ -151,7 +151,7 @@ app.event('app_mention', async ({ event, client, logger }) => {
                             type: 'button',
                             text: {
                                 type: 'plain_text',
-                                text: 'Create Ticket'
+                                text: 'Create a Ticket'
                             },
                             action_id: 'create_ticket_button',
                             style: 'primary'

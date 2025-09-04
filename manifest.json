@@ -3,7 +3,7 @@
         "name": "Send to Intercom",
         "description": "Create a support ticket in Intercom directly from Slack.",
         "background_color": "#2a8c87",
-        "long_description": "This app creates support tickets in Intercom directly from Slack channels. Users mention the bot to open a modal form, and submitting creates tickets via Intercom's API."
+        "long_description": "This app creates tickets in Intercom directly from Slack channels. Users mention the bot to open a modal form, and submitting creates tickets via Intercom's API."
     },
     "features": {
         "bot_user": {
