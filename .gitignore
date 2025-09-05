@@ -1,3 +1,4 @@
 node_modules/
 .env
 ticket_types.json
+intercom_admins.json

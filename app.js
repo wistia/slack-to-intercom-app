@@ -56,23 +56,9 @@ async function createSupportTicket(ticketData, logger) {
         tags: ['Slack to Intercom app']
     };
 
-    // Add ticket parts including the context note if Slack info is available
-    if (slack_user_info && thread_link) {
-        const contextNote = `<p><strong>Ticket opened with the Slack to Intercom app.</strong></p>
-<p><strong>Ticket created by:</strong> ${slack_user_info.email} (${slack_user_info.real_name})</p>
-<p><strong>Original thread:</strong> <a href="${thread_link}" target="_blank">View in Slack</a></p>`;
 
-        intercomPayload.ticket_parts = [
-            {
-                part_type: "note",
-                body: contextNote,
-                author: {
-                    type: "admin",
-                    id: process.env.INTERCOM_ADMIN_ID
-                }
-            }
-        ];
-    }
+    // Debug logging
+    //console.log('Intercom payload:', JSON.stringify(intercomPayload, null, 2));
 
     // Make API call to Intercom
     const response = await axios.post('https://api.intercom.io/tickets', intercomPayload, {
@@ -88,6 +74,9 @@ async function createSupportTicket(ticketData, logger) {
     const ticket = response.data;
     const ticketId = ticket.id;
     const ticketUrl = `https://app.intercom.com/a/apps/${process.env.INTERCOM_APP_ID}/inbox/conversation/${ticket.id}`;
+
+    // Debug logging for response
+    console.log('Intercom response:', JSON.stringify(response.data, null, 2));
 
     logger.info(`Successfully created ticket ${ticketId} for ${customer_email}`);
 
@@ -277,10 +266,11 @@ app.view('ticket_modal', async ({ ack, body, view, client, logger }) => {
         }, logger);
 
         // Post success message in the original thread/channel
+        const submittedByText = slack_user_info ? `\n*Submitted By:* ${slack_user_info.email}` : '';
         await client.chat.postMessage({
             channel: channel,
             thread_ts: thread_ts,
-            text: `🎫 Support ticket created successfully!\n\n*Ticket ID:* ${result.ticket_id}\n*Customer:* ${customer_email}\n*Title:* ${title}\n\n<${result.ticket_url}|View ticket in Intercom>`
+            text: `🎫 Support ticket created successfully!\n\n*Ticket ID:* ${result.ticket_id}\n*Customer:* ${customer_email}\n*Title:* ${title}${submittedByText}\n\n<${result.ticket_url}|View ticket in Intercom>`
         });
 
     } catch (error) {
