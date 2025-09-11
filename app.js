@@ -34,6 +34,62 @@ const app = new App({
     port: process.env.PORT || 3000,
 });
 
+// Function to find admin by email for proper @mention
+async function findAdminByEmail(email, logger) {
+    try {
+        const response = await axios.get('https://api.intercom.io/admins', {
+            headers: {
+                'Authorization': `Bearer ${process.env.INTERCOM_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json',
+                'Intercom-Version': '2.14'
+            },
+            timeout: 5000
+        });
+
+        const admin = response.data.admins?.find(admin => admin.email === email);
+        return admin ? { id: admin.id, name: admin.name } : null;
+    } catch (error) {
+        logger.warn(`Failed to find admin by email ${email}:`, error.message);
+        return null;
+    }
+}
+
+// Function to add a note to an existing Intercom ticket
+async function addTicketNote(ticketId, submitterEmail, logger) {
+    try {
+        // Try to find the admin details for proper @mention
+        const adminDetails = await findAdminByEmail(submitterEmail, logger);
+
+        // Create note body with proper HTML mention if admin found, otherwise use email
+        const noteBody = adminDetails
+            ? `Ticket opened from Slack by <a class="entity_mention" href="//app.intercom.io/apps/${process.env.INTERCOM_APP_ID}/admin/${adminDetails.id}">@${adminDetails.name}</a>`
+            : `Ticket opened from Slack by ${submitterEmail}`;
+
+        const notePayload = {
+            message_type: "note",
+            type: "admin",
+            body: noteBody,
+            admin_id: process.env.INTERCOM_ADMIN_ID
+        };
+
+        const response = await axios.post(`https://api.intercom.io/tickets/${ticketId}/reply`, notePayload, {
+            headers: {
+                'Authorization': `Bearer ${process.env.INTERCOM_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json',
+                'Intercom-Version': '2.14'
+            },
+            timeout: 10000
+        });
+
+        logger.info(`Successfully added note to ticket ${ticketId} by ${submitterEmail}${adminDetails ? ` (@${adminDetails.name})` : ''}`);
+        return response.data;
+    } catch (error) {
+        logger.error(`Failed to add note to ticket ${ticketId}:`, error.message);
+        // Don't throw error - note creation failure shouldn't fail the main ticket creation
+        return null;
+    }
+}
+
 // Reusable function to create support ticket in Intercom
 async function createSupportTicket(ticketData, logger) {
     const { title, description, customer_email, slack_user_info, thread_link } = ticketData;
@@ -79,6 +135,11 @@ async function createSupportTicket(ticketData, logger) {
     console.log('Intercom response:', JSON.stringify(response.data, null, 2));
 
     logger.info(`Successfully created ticket ${ticketId} for ${customer_email}`);
+
+    // Add note to ticket if slack_user_info is available
+    if (slack_user_info && slack_user_info.email) {
+        await addTicketNote(ticketId, slack_user_info.email, logger);
+    }
 
     return {
         ticket_id: ticketId.toString(),
@@ -245,7 +306,7 @@ app.view('ticket_modal', async ({ ack, body, view, client, logger }) => {
         const metadata = JSON.parse(view.private_metadata);
         const { channel, thread_ts, user } = metadata;
 
-        // Get Slack user information
+        // Get Slack user information - required for note creation
         let slack_user_info = null;
         let thread_link = null;
 
@@ -253,7 +314,13 @@ app.view('ticket_modal', async ({ ack, body, view, client, logger }) => {
             slack_user_info = await getSlackUserInfo(user, client);
             thread_link = createSlackThreadLink(channel, thread_ts);
         } catch (userInfoError) {
-            logger.warn('Failed to get Slack user info or create thread link:', userInfoError.message);
+            logger.error('Failed to get Slack user info or create thread link:', userInfoError.message);
+            // Post error message since we need user info for note creation
+            await client.chat.postMessage({
+                channel: channel,
+                thread_ts: thread_ts,
+                text: `⚠️ Warning: Could not retrieve your Slack user information. Ticket will be created but without submitter note.`
+            });
         }
 
         // Create the support ticket with additional context
