@@ -4,25 +4,20 @@ Create Intercom support tickets directly from Slack with an interactive modal fo
 
 ## What It Does
 
-This Slack app bridges the gap between Slack and Intercom by providing an easy way to create support tickets within Slack threads and channels.
-
-- **Interactive Ticket Creation**: Mention the bot (`@Send to Intercom`) in any channel and click the "Create Ticket" button to open a modal form. Submitting the form creates tickets in Intercom via API.
+This Slack app bridges the gap between Slack and Intercom by providing an easy way to create support tickets within Slack threads and channels, and reporting back with the Ticket URL so the submitter can easily follow along.
 
 ## How It Works
 
-1. **Mention the Bot**: Type `@Send to Intercom` in any Slack channel
+1. **Mention the Bot**: Type `@Send to Intercom` in a Slack thread or channel
 2. **Click Create Ticket**: The bot responds with a "Create Ticket" button
 3. **Fill the Form**: A modal opens with fields for:
    - Ticket title
-   - Detailed description
-   - Customer email address
-4. **Submit**: The app creates the ticket in Intercom and posts a confirmation with the ticket ID and direct link
+   - Description
+   - Customer email address 
+4. **Submit**: The app creates the ticket in Intercom and posts a confirmation with the ticket ID and direct link. **Important:** Intercom will send the customer an email notification when the ticket is created.
+5. **Collaborator tagging**: After the ticket is created, it will be updated with a note that @ mentions the person who submitted the ticket. This is helpful for users with collaborator seats who can only read tickets where they've been mentioned.
 
-## Technical Details
-
-This custom Slack app was built using the Bolt framework for Node.js
-
-## Slack Permissions Required
+## Slack App Permissions Required
 
 - `app_mentions:read`: Listen for bot mentions
 - `chat:write`: Post messages and responses
